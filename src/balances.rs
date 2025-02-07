@@ -1,25 +1,35 @@
+use num::traits::{CheckedAdd, CheckedSub, Zero};
 use std::collections::BTreeMap;
 
-#[derive(Debug)]
-pub struct Pallet {
-    balances: BTreeMap<String, u128>,
+/// A característica de configuração do Módulo Balances.
+/// Contém os tipos básicos necessários para lidar com saldos.
+pub trait Config: crate::system::Config {
+    type Balance: Zero + CheckedSub + CheckedAdd + Copy + Ord;
 }
 
-impl Pallet {
+/// Este é o Módulo de Saldos.
+/// É um módulo simples que monitora quanto saldo cada conta tem nesta máquina de estados.
+#[derive(Debug)]
+pub struct Pallet<T: Config> {
+    /// Um mapeamento simples de armazenamento de contas para seus saldos.
+    balances: BTreeMap<T::AccountId, T::Balance>,
+}
+
+impl<T: Config> Pallet<T> {
     pub fn new() -> Self {
         Self {
             balances: BTreeMap::new(),
         }
     }
 
-    /// Define o saldo de um usuário.
-    pub fn set_balance(&mut self, who: &String, amount: u128) {
+    /// Define o saldo de um utilizador.
+    pub fn set_balance(&mut self, who: &T::AccountId, amount: T::Balance) {
         self.balances.insert(who.clone(), amount);
     }
 
-    /// Obtém o saldo de um usuário.
-    pub fn balance(&self, who: &String) -> u128 {
-        *self.balances.get(who).unwrap_or(&0)
+    /// Obtém o saldo de um utilizador.
+    pub fn balance(&self, who: &T::AccountId) -> T::Balance {
+        *self.balances.get(who).unwrap_or(&T::Balance::zero())
     }
 
     /// Transfere `amount` de uma conta para outra.
@@ -27,30 +37,25 @@ impl Pallet {
     /// e impede que ocorram overflow/underflow matemáticos.
     pub fn transfer(
         &mut self,
-        caller: String,
-        to: String,
-        amount: u128,
+        caller: T::AccountId,
+        to: T::AccountId,
+        amount: T::Balance,
     ) -> Result<(), &'static str> {
-        // Obtém o saldo da conta `caller`
         let caller_balance = self.balance(&caller);
 
-        // Verifica se o `caller` tem saldo suficiente
         if caller_balance < amount {
             return Err("Insufficient balance");
         }
 
-        // Obtém o saldo da conta `to`
         let to_balance = self.balance(&to);
 
-        // Calcula os novos saldos usando matemática segura
         let new_caller_balance = caller_balance
-            .checked_sub(amount)
+            .checked_sub(&amount) // Passa amount por referência
             .ok_or("Underflow when debiting the sender's account")?;
         let new_to_balance = to_balance
-            .checked_add(amount)
+            .checked_add(&amount) // Passa amount por referência
             .ok_or("Overflow when crediting the recipient's account")?;
 
-        // Atualiza os saldos
         self.set_balance(&caller, new_caller_balance);
         self.set_balance(&to, new_to_balance);
 
@@ -61,10 +66,24 @@ impl Pallet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::system;
+
+    struct TestConfig;
+
+    impl Config for TestConfig {
+        type Balance = u128;
+    }
+
+    impl system::Config for TestConfig {
+        type AccountId = String;
+        type BlockNumber = u32;
+        type Nonce = u32;
+    }
 
     #[test]
     fn init_balances() {
-        let mut balances = Pallet::new();
+        // Instancia Pallet usando TestConfig
+        let mut balances = Pallet::<TestConfig>::new();
 
         assert_eq!(balances.balance(&"dev0".to_string()), 0);
         balances.set_balance(&"dev0".to_string(), 100);
@@ -74,7 +93,8 @@ mod tests {
 
     #[test]
     fn transfer_balance() {
-        let mut balances = Pallet::new();
+        // Instancia Pallet usando TestConfig
+        let mut balances = Pallet::<TestConfig>::new();
 
         // Inicializa os saldos de dev0 e dev1
         balances.set_balance(&"dev0".to_string(), 100);
