@@ -18,27 +18,8 @@ pub struct Pallet<T: Config> {
     claims: BTreeMap<T::Content, T::AccountId>,
 }
 
-// Um enum público que descreve as chamadas que queremos expor ao despachante.
-// Devemos esperar que o chamador de cada chamada seja fornecido pelo despachante,
-// e não incluído como um parâmetro da chamada.
-pub enum Call<T: Config> {
-    CreateClaim { claim: T::Content },
-    RevokeClaim { claim: T::Content },
-}
-
+#[macros::call]
 impl<T: Config> Pallet<T> {
-    /// Cria uma nova instância do Módulo de Prova de Existência.
-    pub fn new() -> Self {
-        Self {
-            claims: BTreeMap::new(),
-        }
-    }
-
-    /// Obtém o proprietário (se houver) de uma reivindicação.
-    pub fn get_claim(&self, claim: &T::Content) -> Option<&T::AccountId> {
-        self.claims.get(claim)
-    }
-
     /// Cria uma nova reivindicação em nome do `caller`.
     /// Esta função retornará um erro se alguém já tiver reivindicado esse conteúdo.
     pub fn create_claim(&mut self, caller: T::AccountId, claim: T::Content) -> DispatchResult {
@@ -46,7 +27,7 @@ impl<T: Config> Pallet<T> {
             return Err("This content is already claimed.");
         }
 
-        self.claims.insert(claim.clone(), caller);
+        self.claims.insert(claim, caller);
         Ok(())
     }
 
@@ -65,16 +46,17 @@ impl<T: Config> Pallet<T> {
     }
 }
 
-/// Implementação da lógica de dispatch, mapeando de `POECall` para a função subjacente apropriada que queremos executar.
-impl<T: Config> crate::support::Dispatch for Pallet<T> {
-    type Caller = T::AccountId;
-    type Call = Call<T>;
-
-    fn dispatch(&mut self, caller: Self::Caller, call: Self::Call) -> DispatchResult {
-        match call {
-            Call::CreateClaim { claim } => self.create_claim(caller, claim),
-            Call::RevokeClaim { claim } => self.revoke_claim(caller, claim),
+impl<T: Config> Pallet<T> {
+    /// Cria uma nova instância do Módulo de Prova de Existência.
+    pub fn new() -> Self {
+        Self {
+            claims: BTreeMap::new(),
         }
+    }
+
+    /// Obtém o proprietário (se houver) de uma reivindicação.
+    pub fn get_claim(&self, claim: &T::Content) -> Option<&T::AccountId> {
+        self.claims.get(claim)
     }
 }
 

@@ -15,23 +15,8 @@ pub struct Pallet<T: Config> {
     balances: BTreeMap<T::AccountId, T::Balance>,
 }
 
+#[macros::call]
 impl<T: Config> Pallet<T> {
-    pub fn new() -> Self {
-        Self {
-            balances: BTreeMap::new(),
-        }
-    }
-
-    /// Define o saldo de um utilizador.
-    pub fn set_balance(&mut self, who: &T::AccountId, amount: T::Balance) {
-        self.balances.insert(who.clone(), amount);
-    }
-
-    /// Obtém o saldo de um utilizador.
-    pub fn balance(&self, who: &T::AccountId) -> T::Balance {
-        *self.balances.get(who).unwrap_or(&T::Balance::zero())
-    }
-
     /// Transfere `amount` de uma conta para outra.
     /// Esta função verifica se `caller` tem pelo menos `amount` de saldo para transferir
     /// e impede que ocorram overflow/underflow matemáticos.
@@ -56,30 +41,21 @@ impl<T: Config> Pallet<T> {
     }
 }
 
-// Um enum público que descreve as chamadas que queremos expor ao despachante.
-// Devemos esperar que o chamador de cada chamada seja fornecido pelo despachante,
-// e não incluído como parâmetro da chamada.
-pub enum Call<T: Config> {
-    Transfer {
-        to: T::AccountId,
-        amount: T::Balance,
-    },
-}
-
-/// Implementação da lógica de despacho, mapeamento de `Call` para o subjacente apropriado
-/// função que queremos executar.
-impl<T: Config> crate::support::Dispatch for Pallet<T> {
-    type Caller = T::AccountId;
-    type Call = Call<T>;
-
-    fn dispatch(
-        &mut self,
-        caller: Self::Caller,
-        call: Self::Call,
-    ) -> crate::support::DispatchResult {
-        match call {
-            Call::Transfer { to, amount } => self.transfer(caller, to, amount),
+impl<T: Config> Pallet<T> {
+    pub fn new() -> Self {
+        Self {
+            balances: BTreeMap::new(),
         }
+    }
+
+    /// Define o saldo de um utilizador.
+    pub fn set_balance(&mut self, who: &T::AccountId, amount: T::Balance) {
+        self.balances.insert(who.clone(), amount);
+    }
+
+    /// Obtém o saldo de um utilizador.
+    pub fn balance(&self, who: &T::AccountId) -> T::Balance {
+        *self.balances.get(who).unwrap_or(&T::Balance::zero())
     }
 }
 
