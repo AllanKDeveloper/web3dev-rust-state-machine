@@ -40,26 +40,46 @@ impl<T: Config> Pallet<T> {
         caller: T::AccountId,
         to: T::AccountId,
         amount: T::Balance,
-    ) -> Result<(), &'static str> {
+    ) -> crate::support::DispatchResult {
         let caller_balance = self.balance(&caller);
-
-        if caller_balance < amount {
-            return Err("Insufficient balance");
-        }
-
         let to_balance = self.balance(&to);
 
         let new_caller_balance = caller_balance
-            .checked_sub(&amount) // Passa amount por referência
-            .ok_or("Underflow when debiting the sender's account")?;
-        let new_to_balance = to_balance
-            .checked_add(&amount) // Passa amount por referência
-            .ok_or("Overflow when crediting the recipient's account")?;
+            .checked_sub(&amount)
+            .ok_or("Insufficient balance")?;
+        let new_to_balance = to_balance.checked_add(&amount).ok_or("Overflow")?;
 
-        self.set_balance(&caller, new_caller_balance);
-        self.set_balance(&to, new_to_balance);
+        self.balances.insert(caller, new_caller_balance);
+        self.balances.insert(to, new_to_balance);
 
         Ok(())
+    }
+}
+
+// Um enum público que descreve as chamadas que queremos expor ao despachante.
+// Devemos esperar que o chamador de cada chamada seja fornecido pelo despachante,
+// e não incluído como parâmetro da chamada.
+pub enum Call<T: Config> {
+    Transfer {
+        to: T::AccountId,
+        amount: T::Balance,
+    },
+}
+
+/// Implementação da lógica de despacho, mapeamento de `Call` para o subjacente apropriado
+/// função que queremos executar.
+impl<T: Config> crate::support::Dispatch for Pallet<T> {
+    type Caller = T::AccountId;
+    type Call = Call<T>;
+
+    fn dispatch(
+        &mut self,
+        caller: Self::Caller,
+        call: Self::Call,
+    ) -> crate::support::DispatchResult {
+        match call {
+            Call::Transfer { to, amount } => self.transfer(caller, to, amount),
+        }
     }
 }
 

@@ -1,13 +1,24 @@
 mod balances;
+mod proof_of_existence;
+mod support;
 mod system;
 
+use crate::support::Dispatch;
+
 mod types {
-    // Definições de tipo para AccountId e Balance.
     pub type AccountId = String;
     pub type Balance = u128;
-    // Definições de tipo para `BlockNumber` e `Nonce`.
     pub type BlockNumber = u32;
     pub type Nonce = u32;
+    pub type Extrinsic = crate::support::Extrinsic<AccountId, crate::RuntimeCall>;
+    pub type Header = crate::support::Header<BlockNumber>;
+    pub type Block = crate::support::Block<Header, Extrinsic>;
+}
+
+// Estas são todas as chamadas que estão expostas ao mundo.
+// Observe que é apenas um acúmulo das chamadas expostas por cada módulo.
+pub enum RuntimeCall {
+    Balances(balances::Call<Runtime>),
 }
 
 // Este é o nosso Runtime principal.
@@ -37,6 +48,52 @@ impl Runtime {
             balances: balances::Pallet::new(),
         }
     }
+
+    // Executa um bloco de extrínsecos. Incrementa o número do bloco.
+    /*fn execute_block(&mut self, block: types::Block) -> support::DispatchResult {
+        // 1. Incrementar o número do bloco do sistema.
+        self.system.inc_block_number();
+
+        // 2. Verifique se o número do bloco de entrada corresponde ao número do bloco atual,
+        // ou retornar um erro.
+        if block.header.block_number != self.system.block_number() {
+            return Err("Block number mismatch");
+        }
+
+        // 3. Iterar sobre os extrínsecos do bloco...
+        for (i, support::Extrinsic { caller, call }) in block.extrinsics.iter().enumerate() {
+            self.system.inc_nonce(&caller);
+
+            let _res = self.dispatch(caller.clone(), call).map_err(|e| {
+                format!(
+                    "Error in block {}: extrinsic {}: {}",
+                    block.header.block_number, i, e
+                )
+            });
+        }
+
+        Ok(())
+    }*/
+}
+
+impl crate::support::Dispatch for Runtime {
+    type Caller = <Runtime as system::Config>::AccountId;
+    type Call = RuntimeCall;
+
+    // Despacha uma chamada em nome de um chamador. Aumenta o nonce do chamador.
+    //
+    // Dispatch nos permite identificar qual chamada de módulo subjacente queremos executar.
+    // Observe que extraímos o `chamador` do extrínseco e usamos essa informação
+    // para determinar em nome de quem estamos executando a chamada.
+    fn dispatch(
+        &mut self,
+        caller: Self::Caller,
+        runtime_call: Self::Call,
+    ) -> support::DispatchResult {
+        match runtime_call {
+            RuntimeCall::Balances(call) => self.balances.dispatch(caller, call),
+        }
+    }
 }
 
 fn main() {
@@ -50,33 +107,27 @@ fn main() {
     // Usando as variáveis
     runtime.balances.set_balance(&dev0, 100);
 
-    runtime.system.inc_block_number();
-    assert_eq!(runtime.system.block_number(), 1);
+    /*let block_1 = types::Block {
+        header: support::Header { block_number: 1 },
+        extrinsics: vec![
+            support::Extrinsic {
+                caller: dev0,
+                call: RuntimeCall::Balances(balances::Call::Transfer {
+                    to: dev1,
+                    amount: 20,
+                }),
+            },
+            support::Extrinsic {
+                caller: dev0,
+                call: RuntimeCall::Balances(balances::Call::Transfer {
+                    to: azuki,
+                    amount: 20,
+                }),
+            },
+        ],
+    };*/
 
-    runtime.system.inc_nonce(&dev0);
-    let _res = runtime
-        .balances
-        .transfer(dev0.clone(), dev1, 30) // Clonando dev0 para a transferência
-        .map_err(|e| println!("Error on transfer: {}", e));
-
-    runtime.system.inc_nonce(&dev0);
-    let _res = runtime
-        .balances
-        .transfer(dev0, azuki, 20) // dev0 é movido aqui
-        .map_err(|e| println!("Error on transfer: {}", e));
-
-    println!(
-        "Debit balance of dev0: {}",
-        runtime.balances.balance(&"dev0".to_string())
-    );
-    println!(
-        "Debit balance of dev1: {}",
-        runtime.balances.balance(&"dev1".to_string())
-    );
-    println!(
-        "Debit balance of azuki: {}",
-        runtime.balances.balance(&"azuki".to_string())
-    );
+    // runtime.execute_block(block_1).expect("invalid block");
 
     println!("{:?}", runtime);
 }
